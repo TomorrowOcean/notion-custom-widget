@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Weather</title>
+<style>
+  /* Declaring both schemes keeps the iframe transparent inside a dark Notion page. */
+  :root { color-scheme: light dark; }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+
+  /* Light (Notion default) */
+  :root {
+    --text: #37352f;
+    --muted: #9b9a97;
+    --line: rgba(55, 53, 47, 0.09);
+    --field: rgba(55, 53, 47, 0.16);
+    --hover: rgba(55, 53, 47, 0.06);
+    --today: rgba(55, 53, 47, 0.05);
+    --sun: #f6a821;
+    --moon: #f2c14e;
+    --cloud-light: #cfe2f8;
+    --cloud: #b4c8e0;
+    --cloud-rain: #5c9deb;
+    --cloud-storm: #7f8fa6;
+    --rain: #3d86e0;
+    --snow: #8ec1f2;
+    --fog: #a7a7a3;
+    --danger: #eb5757;
+  }
+  /* Dark (Notion dark) */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --text: rgba(255, 255, 255, 0.81);
+      --muted: rgba(255, 255, 255, 0.46);
+      --line: rgba(255, 255, 255, 0.09);
+      --field: rgba(255, 255, 255, 0.16);
+      --hover: rgba(255, 255, 255, 0.07);
+      --today: rgba(255, 255, 255, 0.05);
+      --cloud-light: #a9c3e3;
+      --cloud: #8ea6c4;
+      --cloud-storm: #8c99ad;
+      --fog: #7d7d7a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --text: rgba(255, 255, 255, 0.81);
+    --muted: rgba(255, 255, 255, 0.46);
+    --line: rgba(255, 255, 255, 0.09);
+    --field: rgba(255, 255, 255, 0.16);
+    --hover: rgba(255, 255, 255, 0.07);
+    --today: rgba(255, 255, 255, 0.05);
+    --cloud-light: #a9c3e3;
+    --cloud: #8ea6c4;
+    --cloud-storm: #8c99ad;
+    --fog: #7d7d7a;
+  }
+
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: transparent; }
+  body {
+    color: var(--text);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, "Microsoft JhengHei", "PingFang TC", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+
+  .w { padding: 6px 4px; max-width: 640px; margin: 0 auto; }
+  .en { font-weight: 400; color: var(--muted); }
+
+  /* ---- City tabs ---- */
+  .tabs { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+  .tabs button {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .tabs button:hover { background: var(--hover); }
+  .tabs button[aria-pressed="true"] { background: var(--today); color: var(--text); font-weight: 600; box-shadow: inset 0 0 0 1px var(--line); }
+  .tabs .edit { margin-left: auto; }
+
+  /* ---- Current conditions ---- */
+  .now {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 0 6px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .place { min-width: 0; }
+  .city { font-size: 17px; font-weight: 700; }
+  .city .en { font-size: 14px; }
+  .sub { font-size: 11px; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; margin-top: 1px; }
+  .cur-icon svg { width: 52px; height: 52px; display: block; }
+  .cur { text-align: right; }
+  .temp { font-size: 28px; font-weight: 600; line-height: 1.1; }
+  .desc { font-size: 13px; font-weight: 600; }
+  .meta { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
+
+  /* ---- 7-day forecast ---- */
+  .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding-top: 8px; }
+  .day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 5px 0 6px;
+    border-radius: 8px;
+    min-width: 0;
+  }
+  .day.today { background: var(--today); }
+  .dow { font-size: 12px; font-weight: 600; }
+  .dnum { font-size: 11px; color: var(--muted); }
+  .day svg { width: 30px; height: 30px; margin: 2px 0; }
+  .hi { font-size: 13px; font-weight: 600; }
+  .lo { font-size: 12px; color: var(--muted); }
+  .pop { font-size: 10.5px; color: var(--rain); display: flex; align-items: center; gap: 1px; margin-top: 2px; }
+  .pop svg { width: 9px; height: 9px; margin: 0; }
+  .pop.dry { color: var(--muted); opacity: 0.7; }
+
+  .status { grid-column: 1 / -1; padding: 30px 0; text-align: center; font-size: 12px; color: var(--muted); }
+  .status button { text-decoration: underline; margin-left: 6px; }
+
+  /* ---- Manage cities panel ---- */
+  .panel { padding: 0 6px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .panel-head h2 { font-size: 13px; margin: 0; }
+  .panel-head button { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--today); box-shadow: inset 0 0 0 1px var(--line); }
+  .hint { font-size: 11px; color: var(--muted); margin: 0 0 6px; }
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 24px;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .icon-btn { width: 24px; height: 24px; border-radius: 5px; color: var(--muted); font-size: 14px; line-height: 24px; text-align: center; }
+  .icon-btn:hover { background: var(--hover); }
+  .icon-btn:disabled { opacity: 0.35; cursor: default; background: none; }
+  .star[aria-pressed="true"] { color: var(--sun); }
+  .remove:hover:not(:disabled) { color: var(--danger); }
+  .add { color: var(--rain); font-size: 17px; }
+  .names { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 12px; }
+  .names .en { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rename {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 4px;
+    width: 6.5em;
+    flex: none;
+  }
+  .rename:hover { border-color: var(--line); }
+  .rename:focus { border-color: var(--field); outline: none; }
+  .search {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 8px;
+    font: inherit;
+    font-size: 13px;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--field);
+    border-radius: 6px;
+    padding: 6px 9px;
+  }
+  .search:focus { outline: none; border-color: var(--rain); }
+  .results .names b { font-size: 13px; }
+  .results .row { grid-template-columns: minmax(0, 1fr) 24px; padding-left: 4px; }
+  .note { font-size: 11px; color: var(--muted); padding: 6px 4px; }
+
+  .fade { animation: fade 280ms ease; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .fade { animation: none; } }
+
+  /* Weather icon fills */
+  .i-sun { fill: var(--sun); }
+  .i-ray { stroke: var(--sun); stroke-linecap: round; }
+  .i-moon { fill: var(--moon); }
+  .i-cloud-light { fill: var(--cloud-light); }
+  .i-cloud { fill: var(--cloud); }
+  .i-cloud-rain { fill: var(--cloud-rain); }
+  .i-cloud-storm { fill: var(--cloud-storm); }
+  .i-rain { stroke: var(--rain); stroke-width: 1.8; stroke-linecap: round; }
+  .i-snow { fill: var(--snow); }
+  .i-fog { stroke: var(--fog); stroke-width: 2.2; stroke-linecap: round; }
+  .i-drop { fill: var(--rain); }
+</style>
+</head>
+<body>
+  <div class="w" id="w">
+    <nav class="tabs" id="tabs"></nav>
+
+    <div id="view">
+      <header class="now">
+        <div class="place">
+          <div class="city" id="cityName"></div>
+          <div class="sub" id="sub">Weather</div>
+        </div>
+        <div class="cur-icon" id="curIcon"></div>
+        <div class="cur">
+          <div class="temp" id="temp"></div>
+          <div class="desc" id="desc"></div>
+          <div class="meta" id="meta"></div>
+        </div>
+      </header>
+      <div class="days" id="days"></div>
+    </div>
+
+    <section class="panel" id="panel" hidden>
+      <div class="panel-head">
+        <h2>Cities</h2>
+        <button type="button" id="done">Done</button>
+      </div>
+      <p class="hint">☆ sets the default city · click a Chinese name to rename it</p>
+      <ul class="rows" id="rows"></ul>
+      <input class="search" id="search" type="search" placeholder="Add a city — search in English, e.g. Tokyo" autocomplete="off">
+      <ul class="rows results" id="results"></ul>
+    </section>
+  </div>
+
+<script>
+  // ===== Settings =====
+  // Starting cities for people who have not customised their list yet. The first one is the default.
+  const DEFAULT_CITIES = [
+    { name: '新竹市', en: 'Hsinchu', place: 'Taiwan', lat: 24.8036, lon: 120.9686 },
+    { name: '台北市', en: 'Taipei', place: 'Taiwan', lat: 25.0478, lon: 121.5319 },
+    { name: '慕尼黑', en: 'Munich', place: 'Bavaria, Germany', lat: 48.1374, lon: 11.5755 },
+  ];
+  const MAX_CITIES = 6;
+  // 'auto' follows the light/dark setting; set 'light' or 'dark' to lock it.
+  const THEME = 'auto';
+  // =====================
+
+  const STORAGE_KEY = 'notion-weather-v1';
+  const REFRESH_MS = 30 * 60 * 1000;
+  const params = new URLSearchParams(location.search);
+  const theme = params.get('theme') || THEME;
+  if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const label = (c) => c.en && c.en !== c.name ? `${esc(c.name)} <span class="en">(${esc(c.en)})</span>` : esc(c.name);
+  const keyOf = (c) => `${c.lat.toFixed(3)},${c.lon.toFixed(3)}`;
+  const round = (n) => Math.round(n);
+
+  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const DESC = {
+    0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+    45: 'Fog', 48: 'Rime fog',
+    51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle', 56: 'Freezing drizzle', 57: 'Freezing drizzle',
+    61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 66: 'Freezing rain', 67: 'Freezing rain',
+    71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains',
+    80: 'Light showers', 81: 'Showers', 82: 'Heavy showers', 85: 'Snow showers', 86: 'Snow showers',
+    95: 'Thunderstorm', 96: 'Thunderstorm, hail', 99: 'Thunderstorm, hail',
+  };
+
+  // ---- Icons (inline SVG, 32x32) ----
+  function kind(code) {
+    if (code === 0) return 'clear';
+    if (code === 1 || code === 2) return 'partly';
+    if (code === 3) return 'cloudy';
+    if (code === 45 || code === 48) return 'fog';
+    if (code >= 51 && code <= 57) return 'drizzle';
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return 'rain';
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
+    if (code >= 95) return 'thunder';
+    return 'cloudy';
+  }
+  function sun(cx, cy, r, r1, r2, w) {
+    let rays = '';
+    for (let a = 0; a < 360; a += 45) {
+      const t = a * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+      rays += `<line x1="${(cx + r1 * c).toFixed(2)}" y1="${(cy + r1 * s).toFixed(2)}" x2="${(cx + r2 * c).toFixed(2)}" y2="${(cy + r2 * s).toFixed(2)}"/>`;
+    }
+    return `<g class="i-ray" stroke-width="${w}">${rays}</g><circle class="i-sun" cx="${cx}" cy="${cy}" r="${r}"/>`;
+  }
+  let maskId = 0;
+  function moon(cx, cy, r) {
+    const id = 'm' + (maskId++);
+    return `<mask id="${id}"><rect width="32" height="32" fill="#fff"/><circle cx="${cx + r * 0.55}" cy="${cy - r * 0.4}" r="${r * 0.82}" fill="#000"/></mask>` +
+      `<circle class="i-moon" cx="${cx}" cy="${cy}" r="${r}" mask="url(#${id})"/>`;
+  }
+  function cloud(cls, dx, dy) {
+    return `<g class="${cls}" transform="translate(${dx} ${dy})"><circle cx="12" cy="18" r="5"/><circle cx="18.5" cy="15" r="6.5"/><circle cx="24" cy="19" r="4"/><rect x="7" y="18" width="21" height="5" rx="2.5"/></g>`;
+  }
+  function icon(code, isDay = true) {
+    let body;
+    switch (kind(code)) {
+      case 'clear':
+        body = isDay ? sun(16, 16, 5.5, 8, 10.5, 1.8) : moon(16, 16, 9);
+        break;
+      case 'partly':
+        body = (isDay ? sun(21, 11, 3.8, 5.6, 7.4, 1.4) : moon(21, 10.5, 5.5)) + cloud('i-cloud-light', -2, 3);
+        break;
+      case 'cloudy':
+        body = cloud('i-cloud', -1.5, 1);
+        break;
+      case 'fog':
+        body = '<g class="i-fog"><line x1="7" y1="11" x2="25" y2="11"/><line x1="5" y1="16.5" x2="27" y2="16.5"/><line x1="9" y1="22" x2="23" y2="22"/></g>';
+        break;
+      case 'drizzle':
+        body = cloud('i-cloud-rain', -1.5, -3) + '<g class="i-rain"><line x1="13" y1="23.5" x2="12.3" y2="25.5"/><line x1="20" y1="23.5" x2="19.3" y2="25.5"/></g>';
+        break;
+      case 'rain':
+        body = cloud('i-cloud-rain', -1.5, -3) + '<g class="i-rain"><line x1="11.5" y1="23" x2="10" y2="27.5"/><line x1="16.5" y1="23" x2="15" y2="27.5"/><line x1="21.5" y1="23" x2="20" y2="27.5"/></g>';
+        break;
+      case 'snow':
+        body = cloud('i-cloud', -1.5, -3) + '<g class="i-snow"><circle cx="11" cy="25" r="1.4"/><circle cx="16" cy="27.5" r="1.4"/><circle cx="21" cy="25" r="1.4"/></g>';
+        break;
+      case 'thunder':
+        body = cloud('i-cloud-storm', -1.5, -3) + '<polygon class="i-sun" points="17.5,19.5 12.5,26 15.8,26 14,31 20.5,23.5 17.2,23.5 19.5,19.5"/>';
+        break;
+    }
+    return `<svg viewBox="0 0 32 32" aria-hidden="true">${body}</svg>`;
+  }
+  const DROP = '<svg viewBox="0 0 10 10" aria-hidden="true"><path class="i-drop" d="M5 0.8C3.6 3 2.2 4.6 2.2 6.3a2.8 2.8 0 0 0 5.6 0C7.8 4.6 6.4 3 5 0.8z"/></svg>';
+
+  // ---- Saved city list (per viewer, in this browser) ----
+  let cities = DEFAULT_CITIES.map((c) => ({ ...c }));
+  let defaultKey = keyOf(cities[0]);
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (saved && Array.isArray(saved.cities) && saved.cities.length) {
+      cities = saved.cities.filter((c) => typeof c.lat === 'number' && typeof c.lon === 'number' && c.name);
+      defaultKey = saved.defaultKey;
+    }
+  } catch (e) {}
+  if (!cities.length) cities = DEFAULT_CITIES.map((c) => ({ ...c }));
+  if (!cities.some((c) => keyOf(c) === defaultKey)) defaultKey = keyOf(cities[0]);
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ cities, defaultKey })); } catch (e) {}
+  }
+
+  let currentKey = defaultKey;
+  let editing = false;
+  const currentCity = () => cities.find((c) => keyOf(c) === currentKey) || cities[0];
+
+  // ---- Weather data ----
+  const weather = {};   // keyOf(city) -> Open-Meteo response
+  let fetchedAt = 0;
+  let loadFailed = false;
+
+  async function loadWeather() {
+    const list = cities.slice();
+    const q = new URLSearchParams({
+      latitude: list.map((c) => c.lat).join(','),
+      longitude: list.map((c) => c.lon).join(','),
+      current: 'temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day',
+      daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+      timezone: 'auto',
+      forecast_days: '7',
+    });
+    try {
+      const res = await fetch('https://api.open-meteo.com/v1/forecast?' + q);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      (Array.isArray(json) ? json : [json]).forEach((d, i) => { weather[keyOf(list[i])] = d; });
+      fetchedAt = Date.now();
+      loadFailed = false;
+    } catch (err) {
+      loadFailed = true;
+    }
+    render(false);
+  }
+
+  // ---- Rendering ----
+  function localTimeLabel(d) {
+    const browserOffset = -new Date().getTimezoneOffset() * 60;
+    if (d.utc_offset_seconds === browserOffset) return 'Weather';
+    const t = new Date(Date.now() + d.utc_offset_seconds * 1000);
+    return `Local ${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}`;
+  }
+
+  function renderTabs() {
+    $('tabs').hidden = editing;
+    $('tabs').innerHTML = cities.map((c) => {
+      const k = keyOf(c);
+      return `<button type="button" data-key="${k}" aria-pressed="${k === currentKey}">${label(c)}</button>`;
+    }).join('') + '<button type="button" class="edit" id="edit" title="Add or remove cities">Edit</button>';
+  }
+
+  function render(animate) {
+    renderTabs();
+    $('view').hidden = editing;
+    $('panel').hidden = !editing;
+    if (editing) return;
+
+    const city = currentCity();
+    $('cityName').innerHTML = label(city);
+    const d = weather[keyOf(city)];
+    if (!d) {
+      $('sub').textContent = 'Weather';
+      $('curIcon').innerHTML = $('temp').textContent = $('desc').textContent = $('meta').textContent = '';
+      $('days').innerHTML = loadFailed
+        ? '<div class="status">Weather unavailable<button type="button" id="retry">Retry</button></div>'
+        : '<div class="status">Loading…</div>';
+      return;
+    }
+
+    const c = d.current;
+    $('sub').textContent = localTimeLabel(d);
+    $('curIcon').innerHTML = icon(c.weather_code, c.is_day === 1);
+    $('temp').textContent = `${round(c.temperature_2m)}°C`;
+    $('desc').textContent = DESC[c.weather_code] || '';
+    $('meta').textContent = `Feels ${round(c.apparent_temperature)}° · Humidity ${round(c.relative_humidity_2m)}%`;
+
+    const daily = d.daily;
+    $('days').innerHTML = daily.time.map((iso, i) => {
+      const [y, m, day] = iso.split('-').map(Number);
+      const dow = DOW[new Date(Date.UTC(y, m - 1, day)).getUTCDay()];
+      const pop = daily.precipitation_probability_max[i];
+      const popHtml = pop == null ? '<div class="pop dry">–</div>'
+        : `<div class="pop${pop < 20 ? ' dry' : ''}">${DROP}${pop}%</div>`;
+      return `<div class="day${i === 0 ? ' today' : ''}">
+        <div class="dow">${dow}</div>
+        <div class="dnum">${day}</div>
+        ${icon(daily.weather_code[i])}
+        <div class="hi">${round(daily.temperature_2m_max[i])}°</div>
+        <div class="lo">${round(daily.temperature_2m_min[i])}°</div>
+        ${popHtml}
+      </div>`;
+    }).join('');
+
+    if (animate) {
+      const w = $('view');
+      w.classList.remove('fade');
+      void w.offsetWidth;
+      w.classList.add('fade');
+    }
+  }
+
+  // ---- Manage panel ----
+  function renderRows() {
+    const solo = cities.length === 1;
+    $('rows').innerHTML = cities.map((c, i) => {
+      const k = keyOf(c);
+      const isDefault = k === defaultKey;
+      return `<li class="row" data-i="${i}">
+        <button type="button" class="icon-btn star" aria-pressed="${isDefault}" title="${isDefault ? 'Default city' : 'Set as default'}">${isDefault ? '★' : '☆'}</button>
+        <span class="names"><input class="rename" value="${esc(c.name)}" aria-label="Chinese name"><span class="en">${esc([c.en, c.place].filter(Boolean).join(' · '))}</span></span>
+        <button type="button" class="icon-btn remove" title="Remove" ${solo ? 'disabled' : ''}>×</button>
+      </li>`;
+    }).join('');
+    const full = cities.length >= MAX_CITIES;
+    $('search').disabled = full;
+    $('search').placeholder = full ? `Up to ${MAX_CITIES} cities — remove one to add another` : 'Add a city — search in English, e.g. Tokyo';
+  }
+
+  function openPanel() {
+    editing = true;
+    renderRows();
+    $('search').value = '';
+    $('results').innerHTML = '';
+    render(false);
+  }
+  function closePanel() {
+    editing = false;
+    if (!cities.some((c) => keyOf(c) === currentKey)) currentKey = defaultKey;
+    render(true);
+  }
+
+  $('rows').addEventListener('click', (e) => {
+    const row = e.target.closest('.row');
+    if (!row) return;
+    const i = Number(row.dataset.i);
+    if (e.target.closest('.star')) {
+      defaultKey = keyOf(cities[i]);
+    } else if (e.target.closest('.remove') && cities.length > 1) {
+      const [removed] = cities.splice(i, 1);
+      if (keyOf(removed) === defaultKey) defaultKey = keyOf(cities[0]);
+    } else {
+      return;
+    }
+    save();
+    renderRows();
+  });
+  $('rows').addEventListener('change', (e) => {
+    if (!e.target.classList.contains('rename')) return;
+    const i = Number(e.target.closest('.row').dataset.i);
+    const name = e.target.value.trim();
+    if (name) cities[i].name = name; else e.target.value = cities[i].name;
+    save();
+  });
+
+  // City search: Open-Meteo geocoding finds places reliably by English name, so query both languages
+  // and pair the Chinese and English names by GeoNames id.
+  let searchTimer, searchSeq = 0, searchResults = [];
+  async function geocode(name, lang) {
+    const q = new URLSearchParams({ name, count: '8', language: lang, format: 'json' });
+    const res = await fetch('https://geocoding-api.open-meteo.com/v1/search?' + q);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).results || [];
+  }
+  async function search(text) {
+    const seq = ++searchSeq;
+    $('results').innerHTML = '<li class="note">Searching…</li>';
+    try {
+      const [zh, en] = await Promise.all([geocode(text, 'zh'), geocode(text, 'en')]);
+      if (seq !== searchSeq) return;
+      const enById = new Map(en.map((r) => [r.id, r]));
+      const seen = new Set();
+      searchResults = [];
+      for (const r of [...zh, ...en]) {
+        if (seen.has(r.id)) continue;
+        seen.add(r.id);
+        const e = enById.get(r.id) || r;
+        const zhName = zh.find((z) => z.id === r.id)?.name || e.name;
+        searchResults.push({
+          name: zhName,
+          en: e.name,
+          place: [e.admin1 !== e.name ? e.admin1 : '', e.country].filter(Boolean).join(', '),
+          lat: r.latitude,
+          lon: r.longitude,
+        });
+        if (searchResults.length >= 6) break;
+      }
+      renderResults();
+    } catch (err) {
+      if (seq === searchSeq) $('results').innerHTML = '<li class="note">Search unavailable — try again later</li>';
+    }
+  }
+  function renderResults() {
+    if (!searchResults.length) {
+      $('results').innerHTML = '<li class="note">No match — try the English name</li>';
+      return;
+    }
+    const have = new Set(cities.map(keyOf));
+    $('results').innerHTML = searchResults.map((c, i) => {
+      const added = have.has(keyOf(c));
+      return `<li class="row" data-i="${i}">
+        <span class="names"><b>${label(c)}</b><span class="en">${esc(c.place)}</span></span>
+        <button type="button" class="icon-btn add" title="${added ? 'Already added' : 'Add'}" ${added ? 'disabled' : ''}>${added ? '✓' : '+'}</button>
+      </li>`;
+    }).join('');
+  }
+  $('search').addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    const text = e.target.value.trim();
+    if (text.length < 2) { searchSeq++; $('results').innerHTML = ''; return; }
+    searchTimer = setTimeout(() => search(text), 350);
+  });
+  $('results').addEventListener('click', (e) => {
+    const btn = e.target.closest('.add');
+    if (!btn || btn.disabled || cities.length >= MAX_CITIES) return;
+    const c = searchResults[Number(btn.closest('.row').dataset.i)];
+    cities.push({ ...c });
+    save();
+    renderRows();
+    renderResults();
+    loadWeather();
+  });
+
+  // ---- Tabs & buttons ----
+  $('tabs').addEventListener('click', (e) => {
+    if (e.target.closest('#edit')) { openPanel(); return; }
+    const b = e.target.closest('button[data-key]');
+    if (b && b.dataset.key !== currentKey) {
+      currentKey = b.dataset.key;
+      render(true);
+    }
+  });
+  $('done').addEventListener('click', closePanel);
+  $('days').addEventListener('click', (e) => { if (e.target.id === 'retry') loadWeather(); });
+
+  // ---- Refresh: data every 30 min, local-time label every minute; nothing runs while hidden ----
+  let minuteTimer;
+  function startTimers() {
+    clearInterval(minuteTimer);
+    minuteTimer = setInterval(() => {
+      const d = weather[keyOf(currentCity())];
+      if (d && !editing) $('sub').textContent = localTimeLabel(d);
+      if (Date.now() - fetchedAt > REFRESH_MS) loadWeather();
+    }, 60 * 1000);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearInterval(minuteTimer);
+    } else {
+      if (Date.now() - fetchedAt > REFRESH_MS) loadWeather(); else render(false);
+      startTimers();
+    }
+  });
+
+  render(false);
+  loadWeather();
+  startTimers();
+</script>
+</body>
+</html>
