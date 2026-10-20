@@ -1,11 +1,11 @@
-# Notion Weather Widget
+# Notion Custom Widget
 
-Single-file widgets meant to be embedded in Notion with an **Embed** block.
+Single-file widgets meant to be embedded in Notion with an **Embed** block. Each widget lives in its own folder.
 
 | Widget | File | Live page |
 |---|---|---|
-| Weather | `index.html` | https://tomorrowocean.github.io/notion-weather-widget/ |
-| Flip clock | `clock/index.html` | https://tomorrowocean.github.io/notion-weather-widget/clock/ |
+| Weather | `weather/index.html` | https://tomorrowocean.github.io/notion-custom-widget/weather/ |
+| Flip clock | `clock/index.html` | https://tomorrowocean.github.io/notion-custom-widget/clock/ |
 
 Both follow light/dark mode automatically; add `?theme=light` or `?theme=dark` to the URL to lock it.
 
@@ -22,3 +22,4 @@ Both follow light/dark mode automatically; add `?theme=light` or `?theme=dark` t
 ## Update
 
 Edit the widget's file, then commit and push to `main`. GitHub Pages redeploys automatically.
+To add a widget, put it in a new folder as `index.html`; it is served at `/notion-custom-widget/<folder>/`.
