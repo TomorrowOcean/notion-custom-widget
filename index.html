@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Notion Custom Widget</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --text: #37352f;
+    --muted: #787774;
+    --line: rgba(55, 53, 47, 0.12);
+    --card: #ffffff;
+    --frame: #fbfbfa;
+    --code-bg: rgba(135, 131, 120, 0.12);
+    --accent: #2383e2;
+    --ok: #0f7b6c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #191919;
+      --text: rgba(255, 255, 255, 0.81);
+      --muted: rgba(255, 255, 255, 0.46);
+      --line: rgba(255, 255, 255, 0.1);
+      --card: #202020;
+      --frame: #191919;
+      --code-bg: rgba(255, 255, 255, 0.08);
+      --accent: #529cca;
+      --ok: #4dab9a;
+    }
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #191919;
+    --text: rgba(255, 255, 255, 0.81);
+    --muted: rgba(255, 255, 255, 0.46);
+    --line: rgba(255, 255, 255, 0.1);
+    --card: #202020;
+    --frame: #191919;
+    --code-bg: rgba(255, 255, 255, 0.08);
+    --accent: #529cca;
+    --ok: #4dab9a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", "Helvetica Neue", "Microsoft JhengHei", "PingFang TC", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 16px 64px; }
+
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); max-width: 560px; }
+
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; padding: 2px; gap: 2px; }
+  .seg button {
+    font: inherit; font-size: 13px; color: var(--muted);
+    background: none; border: 0; border-radius: 6px; padding: 4px 12px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--code-bg); color: var(--text); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .preview { background: var(--frame); border-bottom: 1px solid var(--line); padding: 16px; display: flex; justify-content: center; }
+  .preview iframe { display: block; width: 100%; border: 0; background: transparent; }
+  .preview.weather iframe { height: 290px; }
+  .preview.clock iframe { max-width: 260px; height: 200px; }
+  .body { padding: 16px 18px 18px; }
+  .body h2 { font-size: 17px; margin: 0 0 4px; }
+  .body p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+
+  .url { display: flex; gap: 6px; align-items: stretch; }
+  .url code {
+    flex: 1; min-width: 0;
+    font: 12.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+    background: var(--code-bg); border-radius: 6px; padding: 7px 9px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .url button, .url a {
+    font: inherit; font-size: 13px; color: var(--text); text-decoration: none;
+    background: none; border: 1px solid var(--line); border-radius: 6px; padding: 0 10px;
+    display: inline-flex; align-items: center; cursor: pointer; white-space: nowrap;
+  }
+  .url button:hover, .url a:hover { background: var(--code-bg); }
+  .url button.copied { color: var(--ok); border-color: var(--ok); }
+
+  .howto { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 20px; }
+  .howto h2 { font-size: 17px; margin: 0 0 8px; }
+  .howto ol { margin: 0; padding-left: 20px; }
+  .howto li { margin: 4px 0; }
+  .howto code { font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--code-bg); border-radius: 4px; padding: 1px 5px; }
+  footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Notion Custom Widget</h1>
+      <p>給 Notion 首頁用的小工具。複製網址，貼到 Notion 的 Embed block 就能使用，會自動跟著淺色／深色模式切換。</p>
+    </div>
+    <div class="seg" role="group" aria-label="預覽配色">
+      <button type="button" data-theme="auto" aria-pressed="true">自動</button>
+      <button type="button" data-theme="light" aria-pressed="false">淺色</button>
+      <button type="button" data-theme="dark" aria-pressed="false">深色</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <article class="card">
+      <div class="preview weather"><iframe data-src="weather/" title="Weather widget preview" loading="lazy"></iframe></div>
+      <div class="body">
+        <h2>天氣 Weather</h2>
+        <p>目前天氣、體感溫度、濕度，以及 7 天預報和降雨機率。可以自行新增最多 6 個城市並設定預設城市，設定只存在自己的瀏覽器。建議高度 280px。</p>
+        <div class="url"><code data-path="weather/"></code><button type="button">複製</button><a target="_blank" rel="noopener">開啟</a></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="preview clock"><iframe data-src="clock/" title="Clock widget preview" loading="lazy"></iframe></div>
+      <div class="body">
+        <h2>翻頁時鐘 Clock</h2>
+        <p>24 小時制翻頁時鐘，顯示日期與 ISO 週數，每分鐘更新一次。建議高度 180–200px。</p>
+        <div class="url"><code data-path="clock/"></code><button type="button">複製</button><a target="_blank" rel="noopener">開啟</a></div>
+      </div>
+    </article>
+  </div>
+
+  <section class="howto">
+    <h2>放進 Notion</h2>
+    <ol>
+      <li>在 Notion 輸入 <code>/embed</code>，選擇 Embed block。</li>
+      <li>貼上 widget 網址，按 Embed link。</li>
+      <li>拖曳區塊下緣調整高度。</li>
+      <li>想固定淺色或深色，在網址後面加上 <code>?theme=light</code> 或 <code>?theme=dark</code>。</li>
+    </ol>
+  </section>
+
+  <footer>
+    天氣資料來自 <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>，城市中文名稱來自 <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>。
+    原始碼：<a href="https://github.com/TomorrowOcean/notion-custom-widget" target="_blank" rel="noopener">TomorrowOcean/notion-custom-widget</a>
+  </footer>
+</main>
+
+<script>
+  // Absolute widget URLs, built from wherever this page is served.
+  const base = new URL('./', location.href);
+  document.querySelectorAll('.url').forEach((row) => {
+    const url = new URL(row.querySelector('code').dataset.path, base).href;
+    row.querySelector('code').textContent = url;
+    row.querySelector('a').href = url;
+    const btn = row.querySelector('button');
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch (e) {
+        const range = document.createRange();
+        range.selectNodeContents(row.querySelector('code'));
+        getSelection().removeAllRanges();
+        getSelection().addRange(range);
+        document.execCommand('copy');
+      }
+      btn.textContent = '已複製';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '複製'; btn.classList.remove('copied'); }, 1500);
+    });
+  });
+
+  // Preview colour scheme: 'auto' follows the system; light/dark lock the page and the widget previews.
+  function setTheme(theme) {
+    if (theme === 'auto') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+    document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === theme)));
+    document.querySelectorAll('iframe[data-src]').forEach((f) => {
+      f.src = f.dataset.src + (theme === 'auto' ? '' : '?theme=' + theme);
+    });
+  }
+  document.querySelector('.seg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-theme]');
+    if (b) setTheme(b.dataset.theme);
+  });
+  setTheme('auto');
+</script>
+</body>
+</html>

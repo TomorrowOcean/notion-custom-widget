@@ -2,6 +2,8 @@
 
 Single-file widgets meant to be embedded in Notion with an **Embed** block. Each widget lives in its own folder.
 
+Gallery with live previews and copyable URLs: https://tomorrowocean.github.io/notion-custom-widget/ (`index.html`)
+
 | Widget | File | Live page |
 |---|---|---|
 | Weather | `weather/index.html` | https://tomorrowocean.github.io/notion-custom-widget/weather/ |
