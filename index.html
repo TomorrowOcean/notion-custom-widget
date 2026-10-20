@@ -82,7 +82,9 @@
   }
   .tabs button:hover { background: var(--hover); }
   .tabs button[aria-pressed="true"] { background: var(--today); color: var(--text); font-weight: 600; box-shadow: inset 0 0 0 1px var(--line); }
-  .tabs .edit { margin-left: auto; }
+  /* Kept on the left, next to the tabs: Notion overlays its own block controls on the top-right corner. */
+  .tabs .edit { color: var(--muted); opacity: 0.8; }
+  .tabs .edit:hover { opacity: 1; }
 
   /* ---- Current conditions ---- */
   .now {
@@ -129,7 +131,7 @@
 
   /* ---- Manage cities panel ---- */
   .panel { padding: 0 6px; }
-  .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .panel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
   .panel-head h2 { font-size: 13px; margin: 0; }
   .panel-head button { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--today); box-shadow: inset 0 0 0 1px var(--line); }
   .hint { font-size: 11px; color: var(--muted); margin: 0 0 6px; }
@@ -225,7 +227,7 @@
         <h2>Cities</h2>
         <button type="button" id="done">Done</button>
       </div>
-      <p class="hint">☆ sets the default city · click a Chinese name to rename it</p>
+      <p class="hint">☆ sets the default city · click a name to rename it</p>
       <ul class="rows" id="rows"></ul>
       <input class="search" id="search" type="search" placeholder="Add a city — search in English, e.g. Tokyo" autocomplete="off">
       <ul class="rows results" id="results"></ul>
@@ -237,8 +239,6 @@
   // Starting cities for people who have not customised their list yet. The first one is the default.
   const DEFAULT_CITIES = [
     { name: '新竹市', en: 'Hsinchu', place: 'Taiwan', lat: 24.8036, lon: 120.9686 },
-    { name: '台北市', en: 'Taipei', place: 'Taiwan', lat: 25.0478, lon: 121.5319 },
-    { name: '慕尼黑', en: 'Munich', place: 'Bavaria, Germany', lat: 48.1374, lon: 11.5755 },
   ];
   const MAX_CITIES = 6;
   // 'auto' follows the light/dark setting; set 'light' or 'dark' to lock it.
@@ -500,6 +500,7 @@
   // City search: Open-Meteo geocoding finds places reliably by English name, so query both languages
   // and pair the Chinese and English names by GeoNames id.
   let searchTimer, searchSeq = 0, searchResults = [];
+  const hasHan = (s) => /\p{Script=Han}/u.test(s || '');
   async function geocode(name, lang) {
     const q = new URLSearchParams({ name, count: '8', language: lang, format: 'json' });
     const res = await fetch('https://geocoding-api.open-meteo.com/v1/search?' + q);
@@ -518,20 +519,63 @@
       for (const r of [...zh, ...en]) {
         if (seen.has(r.id)) continue;
         seen.add(r.id);
+        // Only populated places (cities, towns); skips airports, districts and similar matches.
+        if (r.feature_code && !r.feature_code.startsWith('PPL')) continue;
         const e = enById.get(r.id) || r;
-        const zhName = zh.find((z) => z.id === r.id)?.name || e.name;
+        // Open-Meteo falls back to a non-Chinese name when it has none, so only keep it if it is Chinese.
+        const zhName = zh.find((z) => z.id === r.id)?.name;
         searchResults.push({
-          name: zhName,
+          id: r.id,
+          name: hasHan(zhName) ? zhName : e.name,
           en: e.name,
-          place: [e.admin1 !== e.name ? e.admin1 : '', e.country].filter(Boolean).join(', '),
+          place: [e.admin1 !== e.name && e.admin1 !== e.country ? e.admin1 : '', e.country].filter(Boolean).join(', '),
           lat: r.latitude,
           lon: r.longitude,
         });
         if (searchResults.length >= 6) break;
       }
       renderResults();
+      improveChineseNames(seq);
     } catch (err) {
       if (seq === searchSeq) $('results').innerHTML = '<li class="note">Search unavailable — try again later</li>';
+    }
+  }
+
+  // Open-Meteo's Chinese names are often missing or Simplified (e.g. 悉尼). Wikidata has Taiwan-usage
+  // labels (雪梨, 杜塞道夫), looked up by GeoNames id. Slower, so results are shown first and updated after.
+  const ZH_TW_ORDER = ['zh-tw', 'zh-hant', 'zh-hk'];
+  async function improveChineseNames(seq) {
+    const ids = searchResults.map((c) => c.id).filter(Number.isInteger);
+    if (!ids.length) return;
+    const sparql = `SELECT ?gn ?lang ?label WHERE {
+      VALUES ?gn { ${ids.map((id) => `"${id}"`).join(' ')} }
+      ?item wdt:P1566 ?gn ; rdfs:label ?label .
+      BIND(lang(?label) AS ?lang)
+      FILTER(?lang IN ("zh-tw", "zh-hant", "zh-hk", "zh"))
+    }`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch('https://query.wikidata.org/sparql?format=json&query=' + encodeURIComponent(sparql),
+        { headers: { Accept: 'application/sparql-results+json' }, signal: ctrl.signal });
+      if (!res.ok) return;
+      const labels = {};
+      for (const b of (await res.json()).results.bindings) {
+        (labels[b.gn.value] ||= {})[b.lang.value] = b.label.value;
+      }
+      if (seq !== searchSeq) return;
+      for (const c of searchResults) {
+        const l = labels[String(c.id)];
+        if (!l) continue;
+        const tw = ZH_TW_ORDER.map((k) => l[k]).find(Boolean);
+        if (tw) c.name = tw;
+        else if (!hasHan(c.name) && l.zh) c.name = l.zh;
+      }
+      renderResults();
+    } catch (err) {
+      // Keep the Open-Meteo names.
+    } finally {
+      clearTimeout(timer);
     }
   }
   function renderResults() {
