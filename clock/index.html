@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Flip Clock</title>
+<style>
+  /* Declaring both schemes lets the browser keep the iframe transparent inside a dark Notion page;
+     without it, a dark host gets an opaque white backdrop behind the widget. */
+  :root { color-scheme: light dark; }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+
+  /* Light (Notion default) */
+  :root {
+    --text: #37352f;
+    --muted: #9b9a97;
+    --tile-top: #f4f4f2;
+    --tile-bottom: #ebebe9;
+    --tile-fg: #37352f;
+    --seam: rgba(55, 53, 47, 0.12);
+    --shadow: 0 1px 2px rgba(15, 15, 15, 0.08), 0 3px 8px rgba(15, 15, 15, 0.06);
+    --pill-bg: rgba(55, 53, 47, 0.07);
+  }
+  /* Dark (Notion dark) */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --text: rgba(255, 255, 255, 0.81);
+      --muted: rgba(255, 255, 255, 0.46);
+      --tile-top: #343434;
+      --tile-bottom: #2c2c2c;
+      --tile-fg: rgba(255, 255, 255, 0.9);
+      --seam: rgba(0, 0, 0, 0.5);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 3px 8px rgba(0, 0, 0, 0.3);
+      --pill-bg: rgba(255, 255, 255, 0.08);
+    }
+  }
+  :root[data-theme="dark"] {
+    --text: rgba(255, 255, 255, 0.81);
+    --muted: rgba(255, 255, 255, 0.46);
+    --tile-top: #343434;
+    --tile-bottom: #2c2c2c;
+    --tile-fg: rgba(255, 255, 255, 0.9);
+    --seam: rgba(0, 0, 0, 0.5);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 3px 8px rgba(0, 0, 0, 0.3);
+    --pill-bg: rgba(255, 255, 255, 0.08);
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  .clock {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(6px, 3.2vw, 14px);
+  }
+
+  /* ---- Flip tiles ---- */
+  .time {
+    display: flex;
+    align-items: center;
+    gap: 0.1em;
+    font-size: clamp(28px, min(21vw, 34vh), 96px);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+  .tile {
+    position: relative;
+    width: 1.36em;
+    height: 1.3em;
+    line-height: 1.3em;
+    border-radius: 0.12em;
+    box-shadow: var(--shadow);
+    color: var(--tile-fg);
+    perspective: 3em;
+  }
+  .half {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 50%;
+    overflow: hidden;
+    backface-visibility: hidden;
+  }
+  .half span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1.3em;
+    text-align: center;
+  }
+  .upper {
+    top: 0;
+    background: var(--tile-top);
+    border-radius: 0.12em 0.12em 0 0;
+    transform-origin: 50% 100%;
+  }
+  .upper span { top: 0; }
+  .lower {
+    bottom: 0;
+    background: var(--tile-bottom);
+    border-radius: 0 0 0.12em 0.12em;
+    transform-origin: 50% 0%;
+  }
+  .lower span { bottom: 0; }
+  .tile::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(50% - 0.5px);
+    height: 1px;
+    background: var(--seam);
+    z-index: 3;
+  }
+
+  .flap { z-index: 2; }
+  .flap.upper { animation: flip-down-top 260ms ease-in forwards; }
+  .flap.lower {
+    transform: rotateX(90deg);
+    animation: flip-down-bottom 260ms ease-out 260ms forwards;
+  }
+  @keyframes flip-down-top {
+    to { transform: rotateX(-90deg); filter: brightness(0.85); }
+  }
+  @keyframes flip-down-bottom {
+    from { transform: rotateX(90deg); filter: brightness(1.1); }
+    to { transform: rotateX(0deg); filter: brightness(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flap { display: none; }
+  }
+
+  .colon {
+    display: flex;
+    flex-direction: column;
+    gap: 0.22em;
+    padding: 0 0.04em;
+  }
+  .colon i {
+    display: block;
+    width: 0.1em;
+    height: 0.1em;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+
+  /* ---- Date / week ---- */
+  .date {
+    font-size: clamp(11px, 5.4vw, 17px);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .date .sep { color: var(--muted); font-weight: 400; margin: 0 0.3em; }
+  .week {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: clamp(10px, 4.4vw, 13px);
+    color: var(--muted);
+    white-space: nowrap;
+    margin-top: calc(-1 * clamp(2px, 1.6vw, 8px));
+  }
+  .week b {
+    font-weight: 600;
+    color: var(--text);
+    background: var(--pill-bg);
+    border-radius: 4px;
+    padding: 0.1em 0.45em;
+  }
+</style>
+</head>
+<body>
+  <div class="clock">
+    <div class="time" aria-hidden="true">
+      <div class="tile" id="hh"></div>
+      <div class="colon"><i></i><i></i></div>
+      <div class="tile" id="mm"></div>
+    </div>
+    <div class="date" id="date"></div>
+    <div class="week"><b id="weekNo"></b><span id="weekRange"></span></div>
+  </div>
+
+<script>
+  // 'auto' follows the system light/dark setting; set 'light' or 'dark' to lock it.
+  const THEME = 'auto';
+
+  const params = new URLSearchParams(location.search);
+  const theme = params.get('theme') || THEME;
+  if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  const pad = (n) => String(n).padStart(2, '0');
+
+  function half(cls, text) {
+    const el = document.createElement('div');
+    el.className = 'half ' + cls;
+    const span = document.createElement('span');
+    span.textContent = text;
+    el.appendChild(span);
+    return el;
+  }
+
+  function setTile(tile, value, animate) {
+    const prev = tile.dataset.value;
+    if (prev === value) return;
+    tile.dataset.value = value;
+
+    if (!animate || prev === undefined) {
+      tile.replaceChildren(half('upper', value), half('lower', value));
+      return;
+    }
+
+    // Static halves: top already shows the new value, bottom keeps the old one until the flap lands.
+    const [upper, lower] = tile.querySelectorAll('.half:not(.flap)');
+    upper.firstChild.textContent = value;
+    const flapTop = half('upper flap', prev);
+    const flapBottom = half('lower flap', value);
+    tile.append(flapTop, flapBottom);
+    flapBottom.addEventListener('animationend', () => {
+      lower.firstChild.textContent = value;
+      flapTop.remove();
+      flapBottom.remove();
+    }, { once: true });
+  }
+
+  // ISO 8601 week: weeks start on Monday, week 1 contains the first Thursday of the year.
+  function isoWeek(d) {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = t.getUTCDay() || 7;
+    t.setUTCDate(t.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return Math.ceil(((t - yearStart) / 864e5 + 1) / 7);
+  }
+
+  function weekRange(d) {
+    const day = d.getDay() || 7;
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (day - 1));
+    const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+    const short = (x) => MONTHS[x.getMonth()].slice(0, 3);
+    return mon.getMonth() === sun.getMonth()
+      ? `${short(mon)} ${mon.getDate()} – ${sun.getDate()}`
+      : `${short(mon)} ${mon.getDate()} – ${short(sun)} ${sun.getDate()}`;
+  }
+
+  const hh = document.getElementById('hh');
+  const mm = document.getElementById('mm');
+  const dateEl = document.getElementById('date');
+  const weekNoEl = document.getElementById('weekNo');
+  const weekRangeEl = document.getElementById('weekRange');
+  let lastDay = '';
+
+  function render(animate) {
+    const now = new Date();
+    setTile(hh, pad(now.getHours()), animate);
+    setTile(mm, pad(now.getMinutes()), animate);
+
+    const dayKey = now.toDateString();
+    if (dayKey !== lastDay) {
+      lastDay = dayKey;
+      dateEl.innerHTML = `${DAYS[now.getDay()]}<span class="sep">|</span>` +
+        `${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+      weekNoEl.textContent = 'W' + isoWeek(now);
+      weekRangeEl.textContent = weekRange(now);
+    }
+  }
+
+  // Wake once per minute, right after the minute changes; stop entirely while hidden.
+  let timer;
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(() => { render(true); schedule(); }, 60000 - (Date.now() % 60000) + 30);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearTimeout(timer);
+    } else {
+      render(false);
+      schedule();
+    }
+  });
+
+  render(false);
+  schedule();
+</script>
+</body>
+</html>
